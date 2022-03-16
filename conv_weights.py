@@ -1,12 +1,14 @@
 import torch
 
-inC = 2
-outC = 2
-iW = 5
-iH = 5
+inC = 4
+outC = 4
+iW = 25
+iH = 25
 kW = 3
 kH = 3
-groups = 1
+stride = 1
+groups = inC
+depthwise = inC == groups
 
 a = torch.rand(1, inC, iH, iW, requires_grad=True)
 w = torch.rand(outC, inC // groups, kH, kW, requires_grad=True)
@@ -32,8 +34,13 @@ for kY in range(kH):
         assert torch.allclose(a, shifted)
         shifted = torch.nn.functional.pad(shifted, (x_offset, -x_offset, y_offset, -y_offset))
         shifted = shifted.reshape(1, 1, inC, -1).transpose(2, 3)
-        shifted = shifted.transpose(2, 3)
-        buda_grads.append(shifted @ (buda_o - 0.1))
+        if depthwise:
+            shifted = shifted * (buda_o - 0.1)
+            shifted = torch.sum(shifted, 2).unsqueeze(2)
+        else:
+            shifted = shifted.transpose(2, 3)
+            shifted = shifted @ (buda_o - 0.1)
+        buda_grads.append(shifted)
 buda_grad = torch.stack(buda_grads, dim=1).squeeze(2)
 print(buda_grad.shape)
 
@@ -45,6 +52,7 @@ if not torch.allclose(w.grad, buda_grad):
 else:
     print("SUCCESS")
 
+"""
 print()
 print("BW Pass:")
 g = out.repeat(1, inC // groups, 1, 1)
@@ -58,6 +66,7 @@ print(f"  torch: reshape/transpose -> {gw.shape}")
 buda_g = g.detach().reshape(g.shape[0], 1, -1).transpose(0, 2).unsqueeze(0)
 buda_gw = gw.detach().reshape(outC, inC, -1).transpose(0, 2).unsqueeze(0)
 print(f"  buda : c2d_??({buda_a.shape}, {buda_g.shape}, groups={inC}, ...) -> {buda_gw.shape}")
+"""
 
 
 
