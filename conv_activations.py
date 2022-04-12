@@ -1,11 +1,11 @@
 import torch
 
-inC = 20
-outC = 30
-iW = 25
-iH = 25
-kW = 5
-kH = 5
+inC = 2
+outC = 3
+iW = 5
+iH = 5
+kW = 3
+kH = 3
 
 a = torch.rand(1, inC, iH, iW, requires_grad=True)
 w = torch.rand(outC, inC, kH, kW, requires_grad=True)
@@ -21,7 +21,7 @@ print(f"  buda : c2d_mm({buda_a.shape}, {buda_w.shape}, ...) -> {buda_o.shape}")
 grad = out - 0.1
 out.backward(gradient=grad)
 
-flip_w = buda_w.flip(1)
+flip_w = buda_w#.flip(1)
 buda_grads = []
 for kY in range(kH):
     for kX in range(kW):
@@ -30,7 +30,7 @@ for kY in range(kH):
         x_offset = (kW // 2) - kX
         shifted = buda_o - 0.1
         shifted = shifted.transpose(2, 3).reshape(1, outC, iH, iW)
-        shifted = torch.nn.functional.pad(shifted, (x_offset, -x_offset, y_offset, -y_offset))
+        shifted = torch.nn.functional.pad(shifted, (-x_offset, x_offset, -y_offset, y_offset))
         shifted = shifted.reshape(1, 1, outC, -1).transpose(2, 3)
         w_slice = flip_w[0][z].transpose(0, 1).unsqueeze(0).unsqueeze(0)
         buda_grads.append(shifted @ w_slice)
