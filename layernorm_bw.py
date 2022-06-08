@@ -28,13 +28,15 @@ dY = grad
 gamma = w_.unsqueeze(0)
 
 scale = 1.0 / shape[dim]
-ds = (dY * x * gamma).sum(dim=-1, keepdim=True)
-db = (dY * gamma).sum(dim=-1, keepdim=True)
+dg = dY * gamma
+ds = (dg * x).sum(dim=-1, keepdim=True)
+db = dg.sum(dim=-1, keepdim=True)
 ta = rstd
-tb = (db * mean - ds) * ta * ta * ta * scale
-tc = -tb * mean - db * ta * scale
+ta_scale = ta * scale
+tb = (db * mean - ds) * ta * ta * ta_scale
+tc = -tb * mean - db * ta_scale
 
-dX = (ta * dY * gamma + tb * x + tc)
+dX = (ta * dg + tb * x + tc)
 print("dX", dX)
 
 dW = (dY * out).sum(-2).sum(-2)
