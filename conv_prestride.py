@@ -99,9 +99,11 @@ def test2(original_shape, kernel_size, stride, padding, add_one=0):
     # Calculate reduced padding
     ps_in_shape = ((original_shape[0] + stride - 1) // stride, (original_shape[1] + stride - 1) // stride)
     init_padding = (padding + stride - 1) // stride
-    tail_padding = padding // stride + add_one
-    orig_tail_padding = (padding // stride)
+    tail_padding = padding // stride
 
+    # Special case where if the bottom right kernel point ends up in the upper left and tail_padding < init_padding
+    # Then we must bump up the tail padding otherwise the bottom right kernel point isn't able to reach its
+    # respective prestride data
     tail_padding += int(((kernel_size[0] - padding) % stride == 1) and tail_padding < init_padding)
 
     def get_offsets(k, stride, padding):
@@ -121,7 +123,6 @@ def test2(original_shape, kernel_size, stride, padding, add_one=0):
     weights_view = torch_weights
     weights_view = pad(weights_view, (0, mx, 0, my))
     weights_view = weights_view.roll((-padding, -padding), (-2, -1))
-    #print("asdf", weights_view)
 
     y_offsets = get_offsets(kernel_size[1], stride, padding)
     x_offsets = get_offsets(kernel_size[0], stride, padding)
@@ -142,7 +143,6 @@ def test2(original_shape, kernel_size, stride, padding, add_one=0):
             ps_weights.append(w)
 
     ps_activations = torch.cat(ps_activations, dim=-3)
-    assert ps_in_shape == (ps_activations.shape[-2], ps_activations.shape[-1])
     ps_weights = torch.cat(ps_weights, dim=-3)
 
     v0 = torch_weights.shape[-3] * torch_weights.shape[-2] * torch_weights.shape[-1]
@@ -164,23 +164,8 @@ def test2(original_shape, kernel_size, stride, padding, add_one=0):
     # Verify
     #
     ps_activations = pad(ps_activations, ps_padding)
-    #print(ps_padding)
-    #print(ps_activations)
-    #print(ps_weights)
     ps_output = torch.nn.functional.conv2d(ps_activations, ps_weights, stride=1, padding=0)
-    f = torch.allclose(torch_output, ps_output, atol=1e-04)
-    if not f:
-        assert ((kernel_size[0] - padding) % stride == 1) and tail_padding < init_padding
-        assert ps_weights[0, 0, 0, 0] == float(kernel_size[0] * kernel_size[1]), f"{padding} {init_padding}"
-        #print(f"test2({original_shape}, {kernel_size}, stride={stride}, padding={padding}) {ps_in_shape} {(init_padding, tail_padding, orig_tail_padding)} {orig_out} {v1 / v0}")
-        raise ValueError(f"test2({original_shape}, {kernel_size}, stride={stride}, padding={padding})\n{torch_output}\n{ps_output}\n{ps_weights}\n{tail_padding}\nFAILURE")
-    asdf = (((original_shape[0] + padding + padding) - (kernel_size[0])) % stride)
-    k = (kernel_size[0] + stride - 1) // stride
-    asdf = (((ps_in_shape[0] + init_padding + orig_tail_padding) - k))# % stride)
-    exact = (asdf <= 1)
-    #exact = ((asdf + stride - 1) // stride)
-    if add_one:
-        print(f"test2({original_shape}, {kernel_size}, stride={stride}, padding={padding}) {ps_in_shape} {(init_padding, tail_padding, orig_tail_padding)} {orig_out} [{asdf}, {exact}] {v1 / v0}")
-    print(f"test2({original_shape}, {kernel_size}, stride={stride}, padding={padding}) {v1 / v0} {tuple(ps_weights.shape[2:])} {ps_weights[0, 0, 0, 0]}")
+    assert torch.allclose(torch_output, ps_output, atol=1e-04), f"test2({original_shape}, {kernel_size}, stride={stride}, padding={padding})\n{torch_output}\n{ps_output}\n{ps_weights}\n{tail_padding}\nFAILURE"
+    print(f"test2({original_shape}, {kernel_size}, stride={stride}, padding={padding}) {v1 / v0}")
 
 run_tests()
