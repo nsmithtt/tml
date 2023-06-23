@@ -32,7 +32,7 @@ def calculate_conv2d_output_dimensions(
         x = (original_x + padding[0] + padding[1] - dilation * (kernel_size[1] - 1) - 1) // stride[1] + 1
     return y, x
 
-def create_conv2d_sparse_picker_matrix(y, x, y_shift, x_shift, k_y, k_x, stride, padding, dilation=1):
+def create_conv2d_sparse_picker_matrix(y, x, y_shift, x_shift, k_y, k_x, stride, padding, dilation=1, cols_only=False):
     cols = torch.arange(start=1, end=y * x + 1).view(y, x)
 
     # pad
@@ -51,6 +51,11 @@ def create_conv2d_sparse_picker_matrix(y, x, y_shift, x_shift, k_y, k_x, stride,
     )
 
     cols = cols.reshape(-1)
+
+    if cols_only:
+        cols -= 1
+        return cols
+
     rows = torch.arange(cols.shape[0])
     rows = rows.index_select(0, cols.nonzero().flatten())
     cols = cols.index_select(0, cols.nonzero().flatten())
@@ -65,9 +70,34 @@ def create_conv2d_sparse_picker_matrix(y, x, y_shift, x_shift, k_y, k_x, stride,
         dtype=torch.float32,
     ).coalesce()
 
-batch = 2
+
+def conv2d_shift(act, y, x, y_shift, x_shift, k_y, k_x, stride, padding, dilation=1, cols_only=False):
+
+    # shift
+    shift_y = dilation * ((k_y - 1) // 2 - y_shift)
+    shift_x = dilation * ((k_x - 1) // 2 - x_shift)
+    #act = torch.nn.functional.pad(act, (-shift_x, shift_x, -shift_y, shift_y))
+
+    # stride
+    act = act[:, :, shift_y::stride[0], shift_x::stride[1]]
+
+    # clamp to output dims
+    out_y, out_x = calculate_conv2d_output_dimensions(y, x, [k_y, k_x], stride, padding)
+
+    act = act[:, :, :out_y, :out_x]
+
+    return act
+
+    act = torch.nn.functional.pad(
+        act, (0, out_x - act.shape[1], 0, out_y - act.shape[0])
+    )
+
+    return act
+
+
+batch = 32
 loop = 32
-df = torch.float
+df = torch.float16
 
 iH = 224
 iW = 224
@@ -85,15 +115,27 @@ for kY in range(kH):
         x_shift = ((kW - 1) // 2) - kX
         picker = create_conv2d_sparse_picker_matrix(iH, iW, y_shift, x_shift, kH, kW, (stride, stride), (padding, padding, padding, padding))
         pickers.append(picker)
-sparse = torch.stack([torch.cat(pickers, dim=-2)]*batch)
-print('asdf', sparse.shape)
 
 if False:
     act = torch.randn(batch, inC, iH, iW, dtype=df)
     layer = torch.nn.Conv2d(inC, outC, kW, stride=stride, padding=padding, dtype=df)
-else:
+elif False:
+    sparse = torch.stack([torch.cat(pickers, dim=-2)]*batch)
     act = torch.randn(batch, iH*iW, inC, dtype=df)
     layer = lambda x: torch.bmm(sparse, x)
+else:
+    act = torch.zeros(batch, inC, iH, iW, dtype=df, requires_grad=False)
+    def layer(x):
+        # pad
+        xs = []
+        x = torch.nn.functional.pad(x, (padding, padding, padding, padding))
+        for kY in range(kH):
+            for kX in range(kW):
+                y_shift = ((kH - 1) // 2) - kY
+                x_shift = ((kW - 1) // 2) - kX
+                xs.append(conv2d_shift(x, iH, iW, y_shift, x_shift, kH, kW, (stride, stride), (padding, padding, padding, padding)))
+
+        torch.cat(xs, dim=-3)
 
 start = time.time()
 
