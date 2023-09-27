@@ -5,7 +5,6 @@ from utils import (
     hstack,
     vstack,
     volume,
-    clamp,
 )
 
 
@@ -86,6 +85,7 @@ def test_conv3d(
     weight_shifted = weight_shifted.transpose(-2, -1)
     weight_shifted = weight_shifted.reshape(kH * kW, outC * outD, inC * iD)
     weight_shifted = weight_shifted.transpose(-2, -1)
+    #print("Sparsity", len(weight_shifted.to_sparse().values()) / volume(weight_shifted.shape), kD / (iD + padding * 2))
 
     act_shifted = hstack(act_shifted, act_shifted.shape[0]).squeeze(0)
     weight_shifted = vstack(weight_shifted, weight_shifted.shape[0]).squeeze(0)
