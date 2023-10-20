@@ -67,6 +67,7 @@ def create_conv2d_sparse_picker_matrix(
     pad_x_only=False,
     sparse_r_pad=0,
     sparse_c_pad=0,
+    smear=1,
 ):
     cols = torch.arange(start=1, end=y * x + 1).view(y, x)
 
@@ -86,6 +87,9 @@ def create_conv2d_sparse_picker_matrix(
     cols = torch.nn.functional.pad(
         cols, (0, out_x - cols.shape[1], 0, out_y - cols.shape[0])
     )
+
+    if smear > 1:
+        cols = cols.reshape(-1, 1).repeat(1, smear)
 
     cols = cols.reshape(-1)
     rows = torch.arange(cols.shape[0])
@@ -124,6 +128,7 @@ def create_conv2d_sparse_matrix(
     stride,
     padding,
     dilation,
+    smear=1,
 ):
     orig_padding = [*padding]
     pickers = []
@@ -133,7 +138,16 @@ def create_conv2d_sparse_matrix(
             y_shift = ((kH - 1) // 2) - kY
             x_shift = ((kW - 1) // 2) - kX
             picker = create_conv2d_sparse_picker_matrix(
-                y, x, y_shift, x_shift, kH, kW, stride, padding, dilation
+                y,
+                x,
+                y_shift,
+                x_shift,
+                kH,
+                kW,
+                stride,
+                padding,
+                dilation,
+                smear=smear,
             )
             pickers.append(picker)
     return torch.stack(pickers)
