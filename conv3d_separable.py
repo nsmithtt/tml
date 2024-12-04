@@ -40,6 +40,10 @@ def test_conv3d(
     act = channels_last_act
     weight = channels_last_weight
 
+    ####################
+    # TTNN Conv3d begin
+    ####################
+
     # Collapse the batch and iD dimensions
     # - [batch*iD, iH, iW, inC]
     act = act.reshape(batch * iD, iH, iW, inC)
@@ -64,11 +68,18 @@ def test_conv3d(
         conv1, ident, stride=(stride, 1), padding=(padding, 0), groups=outC
     )
 
-    # Move back to torch style channels first
+    # Pull back out the oHoW dimensions to get back to final 3d shape
+    # - [batch, oD, oH, oW, outC]
     result = conv2.reshape(
         batch, golden.shape[-3], golden.shape[-2], golden.shape[-1], outC
-    ).permute(0, 4, 1, 2, 3)
+    )
 
+    ####################
+    # TTNN Conv3d end
+    ####################
+
+    # Move back to torch style channels first for golden comparison
+    result = result.permute(0, 4, 1, 2, 3)
     test_str = f"test_conv3d({batch}, {inC}, {outC}, {iD}, {iH}, {iW}, {kD}, {kH}, {kW}, {stride}, {padding})"
     if verbose:
         print(test_str)
