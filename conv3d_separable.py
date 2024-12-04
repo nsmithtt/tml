@@ -56,6 +56,7 @@ def test_conv3d(
     # - [batch, iD, oH*oW, outC*kD]
     conv1 = conv1.reshape(batch, iD, conv1.shape[1] * conv1.shape[2], conv1.shape[3])
 
+    # Conv 2. run conv2d over the iD dimension, we get outC sets of output channels
     # Construct grouped identity weights
     # - [kD, 1, kD, outC]
     ident = torch.eye(kD).reshape(kD, 1, kD, 1).repeat(1, 1, 1, outC)
@@ -63,7 +64,7 @@ def test_conv3d(
         conv1, ident, stride=(stride, 1), padding=(padding, 0), groups=outC
     )
 
-    # Move back to torch style weights
+    # Move back to torch style channels first
     result = conv2.reshape(
         batch, golden.shape[-3], golden.shape[-2], golden.shape[-1], outC
     ).permute(0, 4, 1, 2, 3)
