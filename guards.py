@@ -45,9 +45,20 @@ class Stats:
         self.order[i][index] = self.counter
         self.counter += 1
 
+    @staticmethod
+    def calc_order(o):
+        assert len(o.shape) == 2
+        right = o[0, 1] if o.shape[1] > 1 else -1
+        down = o[1, 0] if o.shape[0] > 1 else -1
+        if right < down:
+            return "Row-major"
+        if right > down:
+            return "Col-major"
+        return "Illegal order"
+
     def __repr__(self):
         accesses = "\n".join(map(str, self.accesses))
-        orders = "\n".join(map(str, self.order))
+        orders = "\n".join(self.calc_order(o) + "\n" + str(o) for o in self.order)
         return (
             "Stats(\n\n# Accesses\n"
             + f"{accesses}"
